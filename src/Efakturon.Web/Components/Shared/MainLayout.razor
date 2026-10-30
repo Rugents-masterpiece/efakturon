@@ -1,0 +1,96 @@
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
+@inject SignOutStateManager SignOutManager
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@ToggleDrawer" />
+        <MudText Typo="Typo.h6" Class="ml-2">Efakturon</MudText>
+        <MudSpacer />
+        
+        <AuthorizeView>
+            <Authorized>
+                <MudText Class="mr-4">@context.User.Identity?.Name</MudText>
+                <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="BeginSignOut">Odhlásiť sa</MudButton>
+            </Authorized>
+            <NotAuthorized>
+                <MudButton Variant="Variant.Text" Color="Color.Inherit" Href="/login">Prihlásiť sa</MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" ClipMode="DrawerClipMode.Always">
+        <MudNavMenu>
+            <AuthorizeView>
+                <Authorized>
+                    <MudNavLink Href="/" Match="NavLinkMatch.All">
+                        <Icon>SvgMaterial.Home</Icon>
+                        Dashboard
+                    </MudNavLink>
+                    <MudNavLink Href="/invoices">
+                        <Icon>SvgMaterial.Description</Icon>
+                        Faktúry
+                    </MudNavLink>
+                    <MudNavLink Href="/invoices/create">
+                        <Icon>SvgMaterial.Add</Icon>
+                        Nová faktúra
+                    </MudNavLink>
+                    <MudNavLink Href="/companies">
+                        <Icon>SvgMaterial.Business</Icon>
+                        Firmy
+                    </MudNavLink>
+                    <MudNavLink Href="/products">
+                        <Icon>SvgMaterial.Inventory2</Icon>
+                        Sklad
+                    </MudNavLink>
+                    <MudNavLink Href="/stock">
+                        <Icon>SvgMaterial.LocalShipping</Icon>
+                        Skladové pohyby
+                    </MudNavLink>
+                    
+                    <MudDivider Class="my-2" />
+                    
+                    <MudNavLink Href="/settings">
+                        <Icon>SvgMaterial.Settings</Icon>
+                        Nastavenia
+                    </MudNavLink>
+                    <MudNavLink Href="/profile">
+                        <Icon>SvgMaterial.Person</Icon>
+                        Profil
+                    </MudNavLink>
+
+                    @if (context.User.IsInRole("SuperAdmin"))
+                    {
+                        <MudDivider Class="my-2" />
+                        <MudNavLink Href="/admin/tenants" Color="Color.Warning">
+                            <Icon>SvgMaterial.AdminPanelSettings</Icon>
+                            Admin: Správa tenantov
+                        </MudNavLink>
+                    }
+                </Authorized>
+            </AuthorizeView>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent Class="pa-4">
+        @Body
+    </MudMainContent>
+
+    <MudSnackbarProvider />
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private async Task BeginSignOut()
+    {
+        await SignOutManager.SetSignOutState();
+        Navigation.NavigateTo("/logout", forceLoad: true);
+    }
+}

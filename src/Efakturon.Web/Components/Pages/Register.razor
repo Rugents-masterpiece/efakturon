@@ -1,0 +1,109 @@
+@page "/register"
+@using Microsoft.AspNetCore.Identity
+@using Efakturon.Domain.Entities
+@inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject IDbContextFactory<EfakturonDbContext> DbFactory
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@layout MainLayout
+
+<PageTitle>Registrácia</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
+    <MudPaper Elevation="3" Class="pa-6">
+        <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-4">Založte si účet pre vašu firmu</MudText>
+        
+        <EditForm Model="registerModel" OnValidSubmit="HandleRegister">
+            <DataAnnotationsValidator />
+            
+            <MudText Typo="Typo.subtitle1" Class="mb-2">Údaje o firme</MudText>
+            <MudTextField @bind-Value="registerModel.CompanyName" Label="Názov firmy" Variant="Variant.Outlined" Required="true" Class="mb-3" />
+            <MudTextField @bind-Value="registerModel.Subdomain" Label="Subdoména (napr. mojafirma)" Variant="Variant.Outlined" Required="true" Class="mb-4" 
+                         HelperText="Vaša adresa bude: mojafirma.efakturon.sk" />
+            
+            <MudDivider Class="my-4" />
+            
+            <MudText Typo="Typo.subtitle1" Class="mb-2">Údaje o administrátorovi</MudText>
+            <MudTextField @bind-Value="registerModel.FirstName" Label="Meno" Variant="Variant.Outlined" Required="true" Class="mb-3" />
+            <MudTextField @bind-Value="registerModel.LastName" Label="Priezvisko" Variant="Variant.Outlined" Required="true" Class="mb-3" />
+            <MudTextField @bind-Value="registerModel.Email" Label="Email" Variant="Variant.Outlined" Required="true" Class="mb-3" />
+            <MudTextField @bind-Value="registerModel.Password" Label="Heslo" Variant="Variant.Outlined" InputType="InputType.Password" Required="true" Class="mb-4" />
+            
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large">
+                Vytvoriť účet a firmu
+            </MudButton>
+        </EditForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private RegisterInputModel registerModel = new();
+
+    private async Task HandleRegister()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        
+        try
+        {
+            // 1. Vytvorenie Tenantu
+            var newTenant = new Tenant
+            {
+                CompanyName = registerModel.CompanyName,
+                Subdomain = registerModel.Subdomain.ToLower().Replace(" ", "-"),
+                ContactEmail = registerModel.Email,
+                Plan = "Basic",
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            db.Tenants.Add(newTenant);
+            await db.SaveChangesAsync();
+
+            // 2. Vytvorenie Užívateľa
+            var newUser = new ApplicationUser
+            {
+                UserName = registerModel.Email,
+                Email = registerModel.Email,
+                FirstName = registerModel.FirstName,
+                LastName = registerModel.LastName,
+                TenantId = newTenant.Id,
+                IsSuperAdmin = false,
+                IsActive = true
+            };
+
+            var result = await UserManager.CreateAsync(newUser, registerModel.Password);
+            if (!result.Succeeded)
+            {
+                foreach (var error in result.Errors)
+                {
+                    Snackbar.Add(error.Description, Severity.Error);
+                }
+                return;
+            }
+
+            // 3. Pridanie rolí a claimov
+            await UserManager.AddClaimAsync(newUser, new System.Security.Claims.Claim("TenantId", newTenant.Id.ToString()));
+            await UserManager.AddToRoleAsync(newUser, "TenantAdmin");
+
+            // 4. Automatické prihlásenie
+            await SignInManager.SignInAsync(newUser, isPersistent: false);
+            
+            Snackbar.Add("Registrácia úspešná! Vitajte v systéme.", Severity.Success);
+            Navigation.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Chyba pri registrácii: {ex.Message}", Severity.Error);
+        }
+    }
+
+    public class RegisterInputModel
+    {
+        [Required] public string CompanyName { get; set; } = string.Empty;
+        [Required] public string Subdomain { get; set; } = string.Empty;
+        [Required] public string FirstName { get; set; } = string.Empty;
+        [Required] public string LastName { get; set; } = string.Empty;
+        [Required] [EmailAddress] public string Email { get; set; } = string.Empty;
+        [Required] [MinLength(8)] public string Password { get; set; } = string.Empty;
+    }
+}

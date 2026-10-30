@@ -1,0 +1,85 @@
+@page "/admin/tenants"
+@using Efakturon.Domain.Entities
+@inject IDbContextFactory<EfakturonDbContext> DbFactory
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@attribute [Authorize(Roles = "SuperAdmin")]
+@layout MainLayout
+
+<PageTitle>Admin - Správa tenantov</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Správa SaaS tenantov</MudText>
+
+<MudDialogButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">Vytvoriť nového tenanta</MudButton>
+</MudDialogButton>
+
+<MudTable Items="tenants" Hover="true" Striped="true">
+    <HeaderContent>
+        <MudTh>Názov firmy</MudTh>
+        <MudTh>Subdoména</MudTh>
+        <MudTh>Plan</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Používatelia</MudTh>
+        <MudTh>Faktúry</MudTh>
+        <MudTh>Vytvorené</MudTh>
+        <MudTh>Akcie</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.CompanyName</MudTd>
+        <MudTd><MudChip T="string" Color="Color.Info">@context.Subdomain</MudChip></MudTd>
+        <MudTd>@context.Plan</MudTd>
+        <MudTd>
+            <MudSwitch @bind-Value="context.IsActive" Color="@(context.IsActive ? Color.Success : Color.Default)" 
+                Size="Size.Small" Changed="() => ToggleTenant(context)" />
+        </MudTd>
+        <MudTd>@context.Users.Count</MudTd>
+        <MudTd>@context.Invoices.Count</MudTd>
+        <MudTd>@context.CreatedAtUtc.ToString("dd.MM.yyyy")</MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" Size="Size.Small" 
+                OnClick="() => NavigateToTenant(context.Id)" Title="Detail" />
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<Tenant> tenants = new();
+    private bool createDialogVisible = false;
+    private Tenant newTenant = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        tenants = await db.Tenants.Include(t => t.Users).Include(t => t.Invoices).ToListAsync();
+    }
+
+    private void OpenCreateDialog()
+    {
+        newTenant = new Tenant();
+        createDialogVisible = true;
+    }
+
+    private async Task SaveNew()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.Tenants.Add(newTenant);
+        await db.SaveChangesAsync();
+        createDialogVisible = false;
+        await OnInitializedAsync();
+        Snackbar.Add("Tenant vytvorený", Severity.Success);
+    }
+
+    private async Task ToggleTenant(Tenant tenant)
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.Entry(tenant).Property(t => t.IsActive).IsModified = true;
+        await db.SaveChangesAsync();
+        Snackbar.Add(tenant.IsActive ? "Tenant aktivovaný" : "Tenant deaktivovaný", Severity.Success);
+    }
+
+    private void NavigateToTenant(Guid id)
+    {
+        Navigation.NavigateTo($"/admin/tenants/{id}");
+    }
+}

@@ -1,0 +1,62 @@
+@page "/settings"
+@inject ISnackbar Snackbar
+@layout MainLayout
+
+<PageTitle>Nastavenia</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Nastavenia firmy</MudText>
+
+<MudPaper Class="pa-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-4">Údaje firmy</MudText>
+    <MudGrid>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="companyName" Label="Názov firmy" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="ico" Label="IČO" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="dic" Label="DIČ" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="dicDph" Label="IČ DPH" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="street" Label="Ulica" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudTextField @bind-Value="streetNumber" Label="Číslo" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudTextField @bind-Value="postalCode" Label="PSČ" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="city" Label="Mesto" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="iban" Label="IBAN" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="bic" Label="BIC/SWIFT" Variant="Variant.Outlined" />
+        </MudItem>
+    </MudGrid>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSettings" Class="mt-4">Uložiť nastavenia</MudButton>
+</MudPaper>
+
+@code {
+    private string companyName = "Moja Firma s.r.o.";
+    private string ico = "";
+    private string dic = "";
+    private string dicDph = "";
+    private string street = "";
+    private string streetNumber = "";
+    private string postalCode = "";
+    private string city = "";
+    private string iban = "";
+    private string bic = "";
+
+    private async Task SaveSettings()
+    {
+        Snackbar.Add("Nastavenia uložené", Severity.Success);
+    }
+}

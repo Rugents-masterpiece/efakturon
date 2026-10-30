@@ -1,0 +1,88 @@
+@page "/"
+@using Efakturon.Domain.Entities
+@inject IDbContextFactory<EfakturonDbContext> DbFactory
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@layout MainLayout
+
+<PageTitle>Dashboard</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Dashboard</MudText>
+
+<MudGrid>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6">Vystavené faktúry</MudText>
+            <MudText Typo="Typo.h3" Color="Color.Primary">@invoiceCount</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6">Celkový obrat (s DPH)</MudText>
+            <MudText Typo="Typo.h3" Color="Color.Success">@totalRevenue.ToString("F2") €</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6">Skladové položky</MudText>
+            <MudText Typo="Typo.h3" Color="Color.Warning">@productCount</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6">Evidované firmy</MudText>
+            <MudText Typo="Typo.h3" Color="Color.Info">@companyCount</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudPaper Class="pa-4 mt-6" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-4">Nedávne faktúry</MudText>
+    <MudTable Items="recentInvoices" Hover="true" Dense="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Číslo</MudTh>
+            <MudTh>Dátum</MudTh>
+            <MudTh>Odberateľ</MudTh>
+            <MudTh>Stav</MudTh>
+            <MudTh>Celkom s DPH</MudTh>
+            <MudTh>Akcie</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.InvoiceNumber</MudTd>
+            <MudTd>@context.IssueDate.ToString("dd.MM.yyyy")</MudTd>
+            <MudTd>@context.CustomerName</MudTd>
+            <MudTd>@context.Status.ToString()</MudTd>
+            <MudTd>@context.TotalWithVat.ToString("F2") €</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" Size="Size.Small" 
+                    OnClick="() => NavigateToInvoice(context.Id)" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private int invoiceCount;
+    private decimal totalRevenue;
+    private int productCount;
+    private int companyCount;
+    private List<Invoice> recentInvoices = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        invoiceCount = await db.Invoices.CountAsync();
+        totalRevenue = await db.Invoices.SumAsync(i => (decimal?)i.TotalWithVat) ?? 0;
+        productCount = await db.Products.CountAsync();
+        companyCount = await db.Companies.CountAsync();
+        recentInvoices = await db.Invoices
+            .OrderByDescending(i => i.IssueDate)
+            .Take(10)
+            .ToListAsync();
+    }
+
+    private void NavigateToInvoice(Guid id)
+    {
+        Navigation.NavigateTo($"/invoices/{id}");
+    }
+}

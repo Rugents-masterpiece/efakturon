@@ -1,0 +1,108 @@
+@page "/products"
+@using Efakturon.Domain.Entities
+@inject IDbContextFactory<EfakturonDbContext> DbFactory
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@layout MainLayout
+
+<PageTitle>Sklad</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Produkty a sklad</MudText>
+
+<MudDialogButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">Pridať produkt</MudButton>
+</MudDialogButton>
+
+<MudTable Items="products" Hover="true" Striped="true" Dense="true">
+    <HeaderContent>
+        <MudTh>Názov</MudTh>
+        <MudTh>Kód/SKU</MudTh>
+        <MudTh>Jedn. cena (bez DPH)</MudTh>
+        <MudTh>DPH %</MudTh>
+        <MudTh>Sklad</MudTh>
+        <MudTh>Min. sklad</MudTh>
+        <MudTh>Typ</MudTh>
+        <MudTh>Akcie</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd>
+        <MudTd>@context.Sku</MudTd>
+        <MudTd>@context.SalePriceWithoutVat:F2 €</MudTd>
+        <MudTd>@context.VatRate:F0 %</MudTd>
+        <MudTd>
+            <MudChip T="string" Color="@(context.CurrentQuantity <= context.MinimumQuantity ? Color.Error : Color.Success)" Size="Size.Small">
+                @context.CurrentQuantity @context.Unit
+            </MudChip>
+        </MudTd>
+        <MudTd>@context.MinimumQuantity</MudTd>
+        <MudTd>@(context.IsStockItem ? "Skladový" : "Neskladový")</MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small" 
+                OnClick="() => OpenEditDialog(context)" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" 
+                OnClick="() => Delete(context.Id)" />
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<Product> products = new();
+    private bool createDialogVisible = false;
+    private bool editDialogVisible = false;
+    private Product? editingProduct;
+    private Product newProduct = new();
+
+    protected override async Task OnInitializedAsync() => await LoadData();
+
+    private async Task LoadData()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        products = await db.Products.ToListAsync();
+    }
+
+    private void OpenCreateDialog()
+    {
+        newProduct = new Product();
+        createDialogVisible = true;
+    }
+
+    private void OpenEditDialog(Product product)
+    {
+        editingProduct = product;
+        editDialogVisible = true;
+    }
+
+    private async Task SaveNew()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.Products.Add(newProduct);
+        await db.SaveChangesAsync();
+        createDialogVisible = false;
+        await LoadData();
+        Snackbar.Add("Produkt pridaný", Severity.Success);
+    }
+
+    private async Task SaveEdit()
+    {
+        if (editingProduct == null) return;
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.Entry(editingProduct).State = EntityState.Modified;
+        await db.SaveChangesAsync();
+        editDialogVisible = false;
+        await LoadData();
+        Snackbar.Add("Produkt upravený", Severity.Success);
+    }
+
+    private async Task Delete(Guid id)
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        var item = await db.Products.FindAsync(id);
+        if (item != null)
+        {
+            db.Products.Remove(item);
+            await db.SaveChangesAsync();
+            await LoadData();
+            Snackbar.Add("Produkt vymazaný", Severity.Success);
+        }
+    }
+}

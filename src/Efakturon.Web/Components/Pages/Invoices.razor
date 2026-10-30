@@ -1,0 +1,110 @@
+@page "/invoices"
+@inject IDbContextFactory<EfakturonDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@layout MainLayout
+
+<PageTitle>Faktúry</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Faktúry</MudText>
+
+<MudGrid>
+    <MudItem>
+        <MudTextField @bind-Value="searchText" Label="Hľadať" Variant="Variant.Outlined" Clearable="true" 
+            OnClear="() => searchText = string.Empty" />
+    </MudItem>
+    <MudItem>
+        <MudSelect @bind-Value="filterStatus" Label="Stav" Variant="Variant.Outlined" Clearable="true">
+            <MudSelectItem Value="@string.Empty" Label="Všetky" />
+            @foreach (var status in Enum.GetValues<Invoice.InvoiceStatus>())
+            {
+                <MudSelectItem Value="@status.ToString()" Label="@status" />
+            }
+        </MudSelect>
+    </MudItem>
+</MudGrid>
+
+<MudTable Items="filteredInvoices" Hover="true" Dense="true" Striped="true" Class="mt-4">
+    <HeaderContent>
+        <MudTh>Číslo</MudTh>
+        <MudTh>Dátum</MudTh>
+        <MudTh>Splatnosť</MudTh>
+        <MudTh>Odberateľ</MudTh>
+        <MudTh>Stav</MudTh>
+        <MudTh>Celkom s DPH</MudTh>
+        <MudTh>Zostatok</MudTh>
+        <MudTh>Akcie</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.InvoiceNumber</MudTd>
+        <MudTd>@context.IssueDate.ToString("dd.MM.yyyy")</MudTd>
+        <MudTd>@context.DueDate.ToString("dd.MM.yyyy")</MudTd>
+        <MudTd>@context.CustomerName</MudTd>
+        <MudTd>
+            <MudChip T="string" Color="@(GetStatusColor(context.Status))" Size="Size.Small">
+                @GetStatusLabel(context.Status)
+            </MudChip>
+        </MudTd>
+        <MudTd>@context.TotalWithVat.ToString("F2") €</MudTd>
+        <MudTd>@context.AmountRemaining.ToString("F2") €</MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" Size="Size.Small" 
+                OnClick="() => NavigateToInvoice(context.Id)" />
+            @if (context.Status == Invoice.InvoiceStatus.Draft)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" 
+                    OnClick="() => NavigateToEdit(context.Id)" />
+            }
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<Invoice> invoices = new();
+    private string searchText = string.Empty;
+    private string? filterStatus;
+
+    private IEnumerable<Invoice> filteredInvoices =>
+        invoices
+            .Where(i => string.IsNullOrEmpty(searchText) || 
+                i.InvoiceNumber.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                i.CustomerName?.Contains(searchText, StringComparison.OrdinalIgnoreCase) == true)
+            .Where(i => string.IsNullOrEmpty(filterStatus) || i.Status.ToString() == filterStatus)
+            .OrderByDescending(i => i.IssueDate)
+            .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        invoices = await db.Invoices
+            .OrderByDescending(i => i.IssueDate)
+            .ToListAsync();
+    }
+
+    private void NavigateToInvoice(Guid id) => Navigation.NavigateTo($"/invoices/{id}");
+    private void NavigateToEdit(Guid id) => Navigation.NavigateTo($"/invoices/{id}/edit");
+
+    private Color GetStatusColor(Invoice.InvoiceStatus status) => status switch
+    {
+        Invoice.InvoiceStatus.Draft => Color.Warning,
+        Invoice.InvoiceStatus.Issued => Color.Info,
+        Invoice.InvoiceStatus.Sent => Color.Info,
+        Invoice.InvoiceStatus.PartiallyPaid => Color.Primary,
+        Invoice.InvoiceStatus.Paid => Color.Success,
+        Invoice.InvoiceStatus.Overdue => Color.Error,
+        Invoice.InvoiceStatus.Cancelled => Color.Default,
+        _ => Color.Default
+    };
+
+    private string GetStatusLabel(Invoice.InvoiceStatus status) => status switch
+    {
+        Invoice.InvoiceStatus.Draft => "Koncept",
+        Invoice.InvoiceStatus.Issued => "Vystavená",
+        Invoice.InvoiceStatus.Sent => "Odoslaná",
+        Invoice.InvoiceStatus.PartiallyPaid => "Čiastočne uhradená",
+        Invoice.InvoiceStatus.Paid => "Uhradená",
+        Invoice.InvoiceStatus.Overdue => "Po splatnosti",
+        Invoice.InvoiceStatus.Cancelled => "Zrušená",
+        _ => status.ToString()
+    };
+}

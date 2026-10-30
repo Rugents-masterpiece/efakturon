@@ -1,0 +1,104 @@
+@page "/profile"
+@using Microsoft.AspNetCore.Identity
+@using Efakturon.Domain.Entities
+@inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
+@layout MainLayout
+
+<PageTitle>Môj profil</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Môj profil</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-4">Údaje profilu</MudText>
+            <MudTextField @bind-Value="firstName" Label="Meno" Variant="Variant.Outlined" Class="mb-3" />
+            <MudTextField @bind-Value="lastName" Label="Priezvisko" Variant="Variant.Outlined" Class="mb-3" />
+            <MudTextField @bind-Value="email" Label="Email" Variant="Variant.Outlined" ReadOnly="true" Class="mb-3" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveProfile">Uložiť profil</MudButton>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-4">Zmena hesla</MudText>
+            <MudTextField @bind-Value="currentPassword" Label="Aktuálne heslo" Variant="Variant.Outlined" InputType="InputType.Password" Class="mb-3" />
+            <MudTextField @bind-Value="newPassword" Label="Nové heslo" Variant="Variant.Outlined" InputType="InputType.Password" Class="mb-3" />
+            <MudTextField @bind-Value="confirmPassword" Label="Potvrdiť nové heslo" Variant="Variant.Outlined" InputType="InputType.Password" Class="mb-3" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ChangePassword">Zmeniť heslo</MudButton>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private string firstName = "";
+    private string lastName = "";
+    private string email = "";
+    private string currentPassword = "";
+    private string newPassword = "";
+    private string confirmPassword = "";
+    private string? currentUserName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        currentUserName = user.Identity?.Name;
+        var userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (userId != null)
+        {
+            var appUser = await UserManager.FindByIdAsync(userId);
+            if (appUser != null)
+            {
+                firstName = appUser.FirstName;
+                lastName = appUser.LastName;
+                email = appUser.Email ?? "";
+            }
+        }
+    }
+
+    private async Task SaveProfile()
+    {
+        var userId = currentUserName != null ? await UserManager.FindByNameAsync(currentUserName) : null;
+        if (userId != null)
+        {
+            userId.FirstName = firstName;
+            userId.LastName = lastName;
+            var result = await UserManager.UpdateAsync(userId);
+            if (result.Succeeded)
+                Snackbar.Add("Profil aktualizovaný", Severity.Success);
+            else
+                foreach (var error in result.Errors)
+                    Snackbar.Add(error.Description, Severity.Error);
+        }
+    }
+
+    private async Task ChangePassword()
+    {
+        if (newPassword != confirmPassword)
+        {
+            Snackbar.Add("Nové heslá sa nezhodujú.", Severity.Error);
+            return;
+        }
+
+        var userId = currentUserName != null ? await UserManager.FindByNameAsync(currentUserName) : null;
+        if (userId == null) return;
+
+        var result = await UserManager.ChangePasswordAsync(userId, currentPassword, newPassword);
+        if (result.Succeeded)
+        {
+            Snackbar.Add("Heslo zmenené", Severity.Success);
+            currentPassword = "";
+            newPassword = "";
+            confirmPassword = "";
+        }
+        else
+        {
+            foreach (var error in result.Errors)
+                Snackbar.Add(error.Description, Severity.Error);
+        }
+    }
+}

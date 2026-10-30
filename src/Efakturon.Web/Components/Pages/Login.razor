@@ -1,0 +1,59 @@
+@page "/login"
+@using Microsoft.AspNetCore.Identity
+@using Efakturon.Domain.Entities
+@inject SignInManager<ApplicationUser> SignInManager
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@layout MainLayout
+
+<PageTitle>Prihlásenie</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
+    <MudPaper Elevation="3" Class="pa-6">
+        <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-4">Prihlásenie do Efakturon</MudText>
+        
+        <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+            
+            <MudTextField @bind-Value="loginModel.Email" Label="Email" Variant="Variant.Outlined" Required="true" Class="mb-3" />
+            <MudTextField @bind-Value="loginModel.Password" Label="Heslo" Variant="Variant.Outlined" InputType="InputType.Password" Required="true" Class="mb-4" />
+            
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large">
+                Prihlásiť sa
+            </MudButton>
+        </EditForm>
+
+        <MudText Align="Align.Center" Class="mt-4">
+            Nemáte účet? <MudLink Href="/register">Zaregistrujte svoju firmu</MudLink>
+        </MudText>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private LoginInputModel loginModel = new();
+
+    private async Task HandleLogin()
+    {
+        var result = await SignInManager.PasswordSignInAsync(loginModel.Email, loginModel.Password, isPersistent: false, lockoutOnFailure: true);
+        
+        if (result.Succeeded)
+        {
+            Snackbar.Add("Úspešné prihlásenie", Severity.Success);
+            Navigation.NavigateTo("/");
+        }
+        else if (result.IsLockedOut)
+        {
+            Snackbar.Add("Účet je dočasne zablokovaný. Skúste to neskôr.", Severity.Error);
+        }
+        else
+        {
+            Snackbar.Add("Nesprávny email alebo heslo", Severity.Error);
+        }
+    }
+
+    public class LoginInputModel
+    {
+        [Required] [EmailAddress] public string Email { get; set; } = string.Empty;
+        [Required] public string Password { get; set; } = string.Empty;
+    }
+}

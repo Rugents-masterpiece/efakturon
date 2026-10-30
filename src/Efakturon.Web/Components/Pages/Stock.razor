@@ -1,0 +1,51 @@
+@page "/stock"
+@using Efakturon.Domain.Entities
+@inject IDbContextFactory<EfakturonDbContext> DbFactory
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@layout MainLayout
+
+<PageTitle>Skladové pohyby</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Skladové pohyby</MudText>
+
+<MudTable Items="movements" Hover="true" Striped="true" Dense="true">
+    <HeaderContent>
+        <MudTh>Dátum</MudTh>
+        <MudTh>Typ</MudTh>
+        <MudTh>Produkt</MudTh>
+        <MudTh>Množstvo</MudTh>
+        <MudTh>Referencia</MudTh>
+        <MudTh>Poznámka</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.CreatedAtUtc:dd.MM.yyyy HH:mm</MudTd>
+        <MudTd>@GetStatusLabel(context.Type)</MudTd>
+        <MudTd>@context.Product?.Name</MudTd>
+        <MudTd>@context.Quantity</MudTd>
+        <MudTd>@context.ReferenceNumber</MudTd>
+        <MudTd>@context.Note</MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<StockMovement> movements = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        movements = await db.StockMovements
+            .Include(m => m.Product)
+            .OrderByDescending(m => m.CreatedAtUtc)
+            .ToListAsync();
+    }
+
+    private string GetStatusLabel(StockMovement.MovementType type) => type switch
+    {
+        StockMovement.MovementType.In => "Príjem",
+        StockMovement.MovementType.Out => "Výdaj",
+        StockMovement.MovementType.Adjustment => "Korekcia",
+        StockMovement.MovementType.Reversal => "Zrušenie",
+        _ => type.ToString()
+    };
+}

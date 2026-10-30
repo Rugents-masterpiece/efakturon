@@ -1,0 +1,354 @@
+@page "/invoices/{Id:guid}"
+@using Efakturon.Application.Interfaces
+@using Efakturon.Domain.Entities
+@inject IDbContextFactory<EfakturonDbContext> DbFactory
+@inject IExportService ExportService
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@layout MainLayout
+
+<PageTitle>Faktúra @invoice?.InvoiceNumber</PageTitle>
+
+@if (invoice == null)
+{
+    <MudText Typo="Typo.h5">Faktúra nebola nájdená.</MudText>
+    <MudButton OnClick="GoBack">Späť na zoznam</MudButton>
+}
+else
+{
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid>
+            <MudItem xs="12" sm="8">
+                <MudText Typo="Typo.h4">Faktúra @invoice.InvoiceNumber</MudText>
+                <MudText Typo="Typo.subtitle1">Dátum vystavenia: @invoice.IssueDate.ToString("dd.MM.yyyy")</MudText>
+                <MudText Typo="Typo.subtitle1">Splatnosť: @invoice.DueDate.ToString("dd.MM.yyyy")</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="4" Class="d-flex flex-column align-sm-end">
+                <MudChip T="string" Color="@(GetStatusColor(invoice.Status))" Size="Size.Large">
+                    @GetStatusLabel(invoice.Status)
+                </MudChip>
+                <MudText Typo="Typo.caption" Class="mt-2">Stav: @invoice.Status.ToString()</MudText>
+            </MudItem>
+        </MudGrid>
+
+        <MudDivider Class="my-4" />
+
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.h6">Dodávateľ</MudText>
+                <MudText>@invoice.SupplierName</MudText>
+                <MudText>IČO: @invoice.SupplierICO</MudText>
+                @if (!string.IsNullOrEmpty(invoice.SupplierDIC))
+                {
+                    <MudText>DIČ: @invoice.SupplierDIC</MudText>
+                }
+                @if (!string.IsNullOrEmpty(invoice.SupplierDICDPH))
+                {
+                    <MudText>IČ DPH: @invoice.SupplierDICDPH</MudText>
+                }
+                <MudText>@invoice.SupplierAddress</MudText>
+                @if (!string.IsNullOrEmpty(invoice.SupplierIBAN))
+                {
+                    <MudText>IBAN: @invoice.SupplierIBAN</MudText>
+                }
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.h6">Odberateľ</MudText>
+                <MudText>@invoice.CustomerName</MudText>
+                <MudText>IČO: @invoice.CustomerICO</MudText>
+                @if (!string.IsNullOrEmpty(invoice.CustomerDIC))
+                {
+                    <MudText>DIČ: @invoice.CustomerDIC</MudText>
+                }
+                @if (!string.IsNullOrEmpty(invoice.CustomerDICDPH))
+                {
+                    <MudText>IČ DPH: @invoice.CustomerDICDPH</MudText>
+                }
+                <MudText>@invoice.CustomerAddress</MudText>
+            </MudItem>
+        </MudGrid>
+
+        <MudDivider Class="my-4" />
+
+        <MudText Typo="Typo.h6" Class="mb-2">Položky</MudText>
+        <MudTable Items="invoice.Items.OrderBy(i => i.SortOrder).ToList()" Hover="true" Dense="true" Class="mb-4">
+            <HeaderContent>
+                <MudTh>Popis</MudTh>
+                <MudTh>Množstvo</MudTh>
+                <MudTh>Jedn. cena (bez DPH)</MudTh>
+                <MudTh>Základ DPH</MudTh>
+                <MudTh>DPH %</MudTh>
+                <MudTh>Suma DPH</MudTh>
+                <MudTh>Celkom s DPH</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Name</MudTd>
+                <MudTd>@context.Quantity @context.Unit</MudTd>
+                <MudTd>@context.UnitPriceWithoutVat.ToString("F2") €</MudTd>
+                <MudTd>@context.VatBase.ToString("F2") €</MudTd>
+                <MudTd>@context.VatRate.ToString("F0") %</MudTd>
+                <MudTd>@context.VatAmount.ToString("F2") €</MudTd>
+                <MudTd>@context.TotalWithVat.ToString("F2") €</MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        <MudPaper Class="pa-4 mb-4" Elevation="0" Style="background-color: var(--mud-palette-background-grey);">
+            <MudText Typo="Typo.h6" Class="mb-2">Rekapitulácia DPH</MudText>
+            @if (invoice.VatBase5 > 0)
+            {
+                <MudGrid>
+                    <MudItem xs="4">Základ DPH 5 %:</MudItem>
+                    <MudItem xs="4">@invoice.VatBase5.ToString("F2") €</MudItem>
+                    <MudItem xs="4">DPH: @invoice.VatAmount5.ToString("F2") €</MudItem>
+                </MudGrid>
+            }
+            @if (invoice.VatBase19 > 0)
+            {
+                <MudGrid>
+                    <MudItem xs="4">Základ DPH 19 %:</MudItem>
+                    <MudItem xs="4">@invoice.VatBase19.ToString("F2") €</MudItem>
+                    <MudItem xs="4">DPH: @invoice.VatAmount19.ToString("F2") €</MudItem>
+                </MudGrid>
+            }
+            @if (invoice.VatBase23 > 0)
+            {
+                <MudGrid>
+                    <MudItem xs="4">Základ DPH 23 %:</MudItem>
+                    <MudItem xs="4">@invoice.VatBase23.ToString("F2") €</MudItem>
+                    <MudItem xs="4">DPH: @invoice.VatAmount23.ToString("F2") €</MudItem>
+                </MudGrid>
+            }
+            <MudDivider Class="my-2" />
+            <MudGrid>
+                <MudItem xs="4"><MudText><b>Celkom bez DPH:</b></MudText></MudItem>
+                <MudItem xs="4"><MudText><b>@invoice.TotalWithoutVat.ToString("F2") €</b></MudText></MudItem>
+                <MudItem xs="4"><MudText><b>DPH celkom: @invoice.TotalVat.ToString("F2") €</b></MudText></MudItem>
+            </MudGrid>
+            <MudGrid>
+                <MudItem xs="4"><MudText Typo="Typo.h6"><b>Celkom s DPH:</b></MudText></MudItem>
+                <MudItem xs="4"><MudText Typo="Typo.h6" Color="Color.Success"><b>@invoice.TotalWithVat.ToString("F2") €</b></MudText></MudItem>
+                <MudItem xs="4"><MudText Typo="Typo.h6">Uhradené: @invoice.AmountPaid.ToString("F2") €</MudText></MudItem>
+            </MudGrid>
+            <MudGrid>
+                <MudItem xs="4"></MudItem>
+                <MudItem xs="4"><MudText Typo="Typo.h6">Zostatok: @invoice.AmountRemaining.ToString("F2") €</MudText></MudItem>
+                <MudItem xs="4"></MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        @if (!string.IsNullOrEmpty(invoice.Note))
+        {
+            <MudPaper Class="pa-3 mb-4" Elevation="0" Style="background-color: #f8f9fa;">
+                <MudText Typo="Typo.subtitle2">Poznámka:</MudText>
+                <MudText>@invoice.Note</MudText>
+            </MudPaper>
+        }
+
+        <MudDivider Class="my-4" />
+
+        <MudText Typo="Typo.h6" Class="mb-2">Export a akcie</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PictureAsPdf" OnClick="DoDownloadPdf">PDF</MudButton>
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Html" OnClick="DoDownloadHtml">HTML</MudButton>
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.Code" OnClick="DoDownloadXml">XML (UBL)</MudButton>
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Print" OnClick="DoPrintInvoice">Tlačiť</MudButton>
+            </MudItem>
+            @if (invoice.Status == Invoice.InvoiceStatus.Draft)
+            {
+                <MudItem xs="12" sm="3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Check" OnClick="DoIssueInvoice">Vystaviť</MudButton>
+                </MudItem>
+            }
+            @if (invoice.Status == Invoice.InvoiceStatus.Issued || invoice.Status == Invoice.InvoiceStatus.Sent)
+            {
+                <MudItem xs="12" sm="3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Money" OnClick="DoMarkAsPaid">Označiť ako uhradenú</MudButton>
+                </MudItem>
+            }
+            @if (invoice.Status != Invoice.InvoiceStatus.Cancelled && invoice.Status != Invoice.InvoiceStatus.Paid)
+            {
+                <MudItem xs="12" sm="3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Cancel" OnClick="DoCancelInvoice">Zrušiť</MudButton>
+                </MudItem>
+            }
+        </MudGrid>
+
+        <MudDivider Class="my-4" />
+
+        <MudText Typo="Typo.h6" Class="mb-2">Platobné QR kódy</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="6" Class="d-flex flex-column align-center">
+                <MudText>Pay by Square / PayMe (SPAYD formát)</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Warning">⚠️ Neoverený development formát</MudText>
+                @if (qrImageBytes != null)
+                {
+                    <img src="data:image/png;base64,@Convert.ToBase64String(qrImageBytes)" style="max-width: 200px;" />
+                }
+                <MudTextField @bind-Value="payBySquareString" Variant="Variant.Outlined" ReadOnly="true" Class="mt-2" Label="SPAYD reťazec" />
+            </MudItem>
+            <MudItem xs="12" sm="6" Class="d-flex flex-column align-center">
+                <MudText>PayMe 2.0</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Warning">⚠️ Neoverený development formát</MudText>
+                @if (paymeQrImageBytes != null)
+                {
+                    <img src="data:image/png;base64,@Convert.ToBase64String(paymeQrImageBytes)" style="max-width: 200px;" />
+                }
+                <MudTextField @bind-Value="paymeString" Variant="Variant.Outlined" ReadOnly="true" Class="mt-2" Label="PayMe 2.0 reťazec" />
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private Invoice? invoice;
+    private byte[]? qrImageBytes;
+    private byte[]? paymeQrImageBytes;
+    private string payBySquareString = string.Empty;
+    private string paymeString = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        invoice = await db.Invoices
+            .Include(i => i.Items)
+            .Include(i => i.Payments)
+            .FirstOrDefaultAsync(i => i.Id == Id);
+
+        if (invoice != null)
+        {
+            payBySquareString = ExportService.GeneratePayBySquareString(invoice);
+            qrImageBytes = ExportService.GenerateQrCode(payBySquareString);
+
+            paymeString = ExportService.GeneratePayMeString(invoice);
+            paymeQrImageBytes = ExportService.GenerateQrCode(paymeString);
+        }
+    }
+
+    private void GoBack() => Navigation.NavigateTo("/invoices");
+
+    private async Task DoDownloadPdf()
+    {
+        if (invoice == null) return;
+        var pdfBytes = ExportService.GeneratePdf(invoice);
+        await DownloadFile(pdfBytes, $"Faktura_{invoice.InvoiceNumber}.pdf", "application/pdf");
+        Snackbar.Add("PDF stiahnuté", Severity.Success);
+    }
+
+    private async Task DoDownloadHtml()
+    {
+        if (invoice == null) return;
+        var htmlStr = ExportService.GenerateHtml(invoice);
+        var htmlBytes = System.Text.Encoding.UTF8.GetBytes(htmlStr);
+        await DownloadFile(htmlBytes, $"Faktura_{invoice.InvoiceNumber}.html", "text/html");
+        Snackbar.Add("HTML stiahnuté", Severity.Success);
+    }
+
+    private async Task DoDownloadXml()
+    {
+        if (invoice == null) return;
+        var xmlBytes = ExportService.GeneratePeppolXml(invoice);
+        await DownloadFile(xmlBytes, $"Faktura_{invoice.InvoiceNumber}_Peppol.xml", "application/xml");
+        Snackbar.Add("XML stiahnuté (UBL 2.1)", Severity.Success);
+    }
+
+    private async Task DoPrintInvoice()
+    {
+        if (invoice == null) return;
+        var htmlStr = ExportService.GenerateHtml(invoice);
+        var htmlBytes = System.Text.Encoding.UTF8.GetBytes(htmlStr);
+        var base64 = Convert.ToBase64String(htmlBytes);
+        await JS.InvokeVoidAsync("openPrintWindow", $"data:text/html;base64,{base64}");
+    }
+
+    private async Task DownloadFile(byte[] fileBytes, string fileName, string contentType)
+    {
+        using var stream = new MemoryStream(fileBytes);
+        using var streamRef = new DotNetStreamReference(stream: stream);
+        await JS.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef, contentType);
+    }
+
+    private async Task DoIssueInvoice()
+    {
+        if (invoice == null) return;
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            invoice.Status = Invoice.InvoiceStatus.Issued;
+            await db.SaveChangesAsync();
+            Snackbar.Add("Faktúra vystavená", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Chyba: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DoMarkAsPaid()
+    {
+        if (invoice == null) return;
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            invoice.Status = Invoice.InvoiceStatus.Paid;
+            invoice.AmountPaid = invoice.TotalWithVat;
+            await db.SaveChangesAsync();
+            Snackbar.Add("Faktúra označená ako uhradená", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Chyba: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DoCancelInvoice()
+    {
+        if (invoice == null) return;
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            invoice.Status = Invoice.InvoiceStatus.Cancelled;
+            await db.SaveChangesAsync();
+            Snackbar.Add("Faktúra zrušená", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Chyba: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private Color GetStatusColor(Invoice.InvoiceStatus status) => status switch
+    {
+        Invoice.InvoiceStatus.Draft => Color.Warning,
+        Invoice.InvoiceStatus.Issued => Color.Info,
+        Invoice.InvoiceStatus.Sent => Color.Info,
+        Invoice.InvoiceStatus.PartiallyPaid => Color.Primary,
+        Invoice.InvoiceStatus.Paid => Color.Success,
+        Invoice.InvoiceStatus.Overdue => Color.Error,
+        Invoice.InvoiceStatus.Cancelled => Color.Default,
+        _ => Color.Default
+    };
+
+    private string GetStatusLabel(Invoice.InvoiceStatus status) => status switch
+    {
+        Invoice.InvoiceStatus.Draft => "Koncept",
+        Invoice.InvoiceStatus.Issued => "Vystavená",
+        Invoice.InvoiceStatus.Sent => "Odoslaná",
+        Invoice.InvoiceStatus.PartiallyPaid => "Čiastočne uhradená",
+        Invoice.InvoiceStatus.Paid => "Uhradená",
+        Invoice.InvoiceStatus.Overdue => "Po splatnosti",
+        Invoice.InvoiceStatus.Cancelled => "Zrušená",
+        _ => status.ToString()
+    };
+}

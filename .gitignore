@@ -1,0 +1,46 @@
+## Gitignore for .NET + Docker
+
+# Visual Studio
+.vs/
+.vscode/
+*.csproj.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# Rider
+.idea/
+*.sln.iml
+
+# NuGet
+packages/
+*.nupkg
+**/packages/config
+nuget.config
+
+# Docker
+.dockerignore
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+*.swp
+*.swo
+*~
+.idea/

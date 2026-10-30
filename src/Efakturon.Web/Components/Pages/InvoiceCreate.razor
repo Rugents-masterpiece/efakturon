@@ -1,0 +1,334 @@
+@page "/invoices/create"
+@using Efakturon.Application.Interfaces
+@using Efakturon.Domain.Entities
+@inject NavigationManager Navigation
+@using Efakturon.Infrastructure.Data
+@inject IDbContextFactory<EfakturonDbContext> DbFactory
+@inject IInvoiceCalculationService CalculationService
+@inject IInvoiceSequenceService SequenceService
+@inject ITenantContext TenantContext
+@inject ISnackbar Snackbar
+@layout MainLayout
+
+<PageTitle>Nová faktúra</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Nová faktúra</MudText>
+
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="4">
+            <MudSelect @bind-Value="selectedSupplierId" Label="Dodávateľ (Moja firma)" Required="true" Variant="Variant.Outlined">
+                @foreach (var c in suppliers)
+                {
+                    <MudSelectItem Value="c.Id">@c.Name (@c.ICO)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudSelect @bind-Value="selectedCustomerId" Label="Odberateľ" Required="true" Variant="Variant.Outlined">
+                @foreach (var c in customers)
+                {
+                    <MudSelectItem Value="c.Id">@c.Name (@c.ICO)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudDatePicker @bind-DateValue="issueDate" Label="Dátum vystavenia" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudDatePicker @bind-DateValue="dueDate" Label="Dátum splatnosti" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudTextField @bind-Value="previewNumber" Label="Náhľad čísla" Variant="Variant.Outlined" ReadOnly="true" />
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="variableSymbol" Label="Variabilný symbol" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="paymentMethod" Label="Spôsob úhrady" Variant="Variant.Outlined" />
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-2">Položky</MudText>
+    
+    <MudTable Items="invoiceItems" Hover="true" Dense="true" Striped="true">
+        <HeaderContent>
+            <MudTh>Produkt</MudTh>
+            <MudTh>Popis</MudTh>
+            <MudTh>Množstvo</MudTh>
+            <MudTh>Jedn. cena (bez DPH)</MudTh>
+            <MudTh>Zľava %</MudTh>
+            <MudTh>DPH %</MudTh>
+            <MudTh>Základ DPH</MudTh>
+            <MudTh>Suma DPH</MudTh>
+            <MudTh>Celkom s DPH</MudTh>
+            <MudTh>Akcie</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                <MudSelect @bind-Value="context.ProductId" Variant="Variant.Outlined" Dense="true">
+                    <MudSelectItem Value="@Guid.Empty" Label="-- Vyberte --" />
+                    @foreach (var p in products)
+                    {
+                        <MudSelectItem Value="p.Id">@p.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudTd>
+            <MudTd>
+                <MudTextField @bind-Value="context.Description" Variant="Variant.Outlined" Dense="true" 
+                    Style="width:150px" />
+            </MudTd>
+            <MudTd>
+                <MudNumericField @bind-Value="context.Quantity" Variant="Variant.Outlined" Dense="true" 
+                    Style="width:80px" Min="0.01m" Format="#,##0.####" T="decimal" />
+            </MudTd>
+            <MudTd>
+                <MudNumericField @bind-Value="context.UnitPriceWithoutVat" Variant="Variant.Outlined" Dense="true" 
+                    Style="width:100px" Min="0m" Format="#,##0.00" T="decimal" />
+            </MudTd>
+            <MudTd>
+                <MudNumericField @bind-Value="context.DiscountPercent" Variant="Variant.Outlined" Dense="true" 
+                    Style="width:70px" Min="0m" Max="100m" Format="#,##0.00" T="decimal" />
+            </MudTd>
+            <MudTd>
+                <MudSelect @bind-Value="context.VatRate" Variant="Variant.Outlined" Dense="true" Style="width:80px">
+                    <MudSelectItem Value="@((decimal)5)">5 %</MudSelectItem>
+                    <MudSelectItem Value="@((decimal)19)">19 %</MudSelectItem>
+                    <MudSelectItem Value="@((decimal)23)">23 %</MudSelectItem>
+                    <MudSelectItem Value="@((decimal)0)">0 %</MudSelectItem>
+                </MudSelect>
+            </MudTd>
+            <MudTd>@context.VatBase:F2 €</MudTd>
+            <MudTd>@context.VatAmount:F2 €</MudTd>
+            <MudTd>@context.TotalWithVat:F2 €</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" 
+                    OnClick="() => RemoveItem(context)" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" 
+        OnClick="AddItem" Class="mt-2">Pridať položku</MudButton>
+</MudPaper>
+
+<MudPaper Class="pa-4 mb-4" Elevation="0" Style="background-color: var(--mud-palette-background-grey);">
+    <MudGrid>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="note" Label="Poznámka k faktúre" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField @bind-Value="internalNote" Label="Interná poznámka" Variant="Variant.Outlined" />
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Class="pa-4 mb-4" Elevation="0" Style="background-color: var(--mud-palette-background-grey);">
+    <MudGrid>
+        <MudItem xs="4" Class="text-right"><MudText>Medzisúčet (bez DPH):</MudText></MudItem>
+        <MudItem xs="4" Class="text-right"><MudText>@totalWithoutVat:F2 €</MudText></MudItem>
+        <MudItem xs="4" Class="text-right"><MudText>DPH celkom: @totalVat:F2 €</MudText></MudItem>
+        <MudItem xs="12" Class="text-right"><MudText Typo="Typo.h6">Celkom s DPH: <b>@totalWithVat:F2 €</b></MudText></MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudGrid>
+    <MudItem>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveDraft" 
+            Disabled="@(saving || !IsValid)" StartIcon="@Icons.Material.Filled.Save">
+            @(saving ? "Ukladá sa..." : "Uložiť koncept")
+        </MudButton>
+    </MudItem>
+    <MudItem>
+        <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="IssueInvoice" 
+            Disabled="@(saving || !IsValid)" StartIcon="@Icons.Material.Filled.Check">
+            @(saving ? "Vystavuje sa..." : "Vystaviť faktúru")
+        </MudButton>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private List<Company> suppliers = new();
+    private List<Company> customers = new();
+    private List<Product> products = new();
+    private List<InvoiceItem> invoiceItems = new();
+
+    private Guid selectedSupplierId = Guid.Empty;
+    private Guid selectedCustomerId = Guid.Empty;
+    private DateTime? issueDate = DateTime.Today;
+    private DateTime? dueDate = DateTime.Today.AddDays(14);
+    private string previewNumber = "Náhľad čísla...";
+    private string variableSymbol = string.Empty;
+    private string paymentMethod = string.Empty;
+    private string note = string.Empty;
+    private string internalNote = string.Empty;
+    private bool saving = false;
+
+    private decimal totalWithoutVat => invoiceItems.Sum(i => i.VatBase);
+    private decimal totalVat => invoiceItems.Sum(i => i.VatAmount);
+    private decimal totalWithVat => totalWithoutVat + totalVat;
+    private bool IsValid => selectedSupplierId != Guid.Empty && selectedCustomerId != Guid.Empty && invoiceItems.Any(i => i.Quantity > 0 && i.UnitPriceWithoutVat > 0);
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        suppliers = await db.Companies.Where(c => c.Type == Company.CompanyType.OwnCompany).ToListAsync();
+        customers = await db.Companies.Where(c => c.Type == Company.CompanyType.Customer).ToListAsync();
+        products = await db.Products.Where(p => p.IsActive).ToListAsync();
+
+        if (suppliers.Any()) selectedSupplierId = suppliers.First().Id;
+        if (customers.Any()) selectedCustomerId = customers.First().Id;
+
+        AddItem();
+        await UpdatePreviewNumber();
+    }
+
+    private async Task UpdatePreviewNumber()
+    {
+        if (selectedSupplierId == Guid.Empty) return;
+        try
+        {
+            previewNumber = await SequenceService.PreviewNextNumberAsync(TenantContext.CurrentTenantId, "FA", DateTime.Today.Year);
+        }
+        catch
+        {
+            previewNumber = $"FA{DateTime.Today.Year:D4}-000001";
+        }
+    }
+
+    private void AddItem()
+    {
+        invoiceItems.Add(new InvoiceItem { Quantity = 1, VatRate = 23, SortOrder = invoiceItems.Count + 1 });
+        StateHasChanged();
+    }
+
+    private void RemoveItem(InvoiceItem item)
+    {
+        invoiceItems.Remove(item);
+        StateHasChanged();
+    }
+
+    private async Task SaveDraft()
+    {
+        if (!IsValid || saving) return;
+        saving = true;
+        StateHasChanged();
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var tenantId = TenantContext.CurrentTenantId;
+
+            var invoice = new Invoice
+            {
+                TenantId = tenantId,
+                InvoiceNumber = $"KONCEPT-{Guid.NewGuid():N}.",
+                Status = Invoice.InvoiceStatus.Draft,
+                IssueDate = issueDate.Value,
+                DueDate = dueDate.Value,
+                VariableSymbol = variableSymbol,
+                PaymentMethod = paymentMethod,
+                Note = note,
+                InternalNote = internalNote,
+                Items = invoiceItems
+            };
+
+            CalculationService.CalculateInvoiceTotals(invoice);
+
+            db.Invoices.Add(invoice);
+            await db.SaveChangesAsync();
+
+            Snackbar.Add("Koncept uložený", Severity.Success);
+            Navigation.NavigateTo($"/invoices/{invoice.Id}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Chyba: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task IssueInvoice()
+    {
+        if (!IsValid || saving) return;
+        saving = true;
+        StateHasChanged();
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var tenantId = TenantContext.CurrentTenantId;
+
+            var invoiceNumber = await SequenceService.ReserveNextNumberAsync(tenantId);
+
+            var supplier = suppliers.FirstOrDefault(s => s.Id == selectedSupplierId);
+            var customer = customers.FirstOrDefault(c => c.Id == selectedCustomerId);
+
+            var invoice = new Invoice
+            {
+                TenantId = tenantId,
+                InvoiceNumber = invoiceNumber,
+                Status = Invoice.InvoiceStatus.Issued,
+                IssueDate = issueDate.Value,
+                DueDate = dueDate.Value,
+                TaxPointDate = issueDate.Value,
+                VariableSymbol = variableSymbol,
+                PaymentMethod = paymentMethod,
+                Note = note,
+                InternalNote = internalNote,
+                SupplierId = selectedSupplierId,
+                CustomerId = selectedCustomerId,
+                SupplierName = supplier?.Name ?? "",
+                SupplierICO = supplier?.ICO ?? "",
+                SupplierDIC = supplier?.DIC,
+                SupplierDICDPH = supplier?.DICDPH,
+                SupplierAddress = $"{supplier?.Street} {supplier?.StreetNumber}".Trim(),
+                SupplierIBAN = supplier?.IBAN,
+                SupplierBIC = supplier?.BIC,
+                CustomerName = customer?.Name ?? "",
+                CustomerICO = customer?.ICO ?? "",
+                CustomerDIC = customer?.DIC,
+                CustomerDICDPH = customer?.DICDPH,
+                CustomerAddress = $"{customer?.Street} {customer?.StreetNumber}".Trim(),
+                Items = invoiceItems
+            };
+
+            CalculationService.CalculateInvoiceTotals(invoice);
+
+            db.Invoices.Add(invoice);
+            await db.SaveChangesAsync();
+
+            foreach (var item in invoiceItems)
+            {
+                if (item.ProductId != Guid.Empty)
+                {
+                    var prod = await db.Products.FindAsync(item.ProductId);
+                    if (prod != null && prod.IsStockItem)
+                    {
+                        prod.CurrentQuantity -= (int)item.Quantity;
+                    }
+                }
+            }
+            await db.SaveChangesAsync();
+
+            Snackbar.Add($"Faktúra {invoiceNumber} vystavená", Severity.Success);
+            Navigation.NavigateTo($"/invoices/{invoice.Id}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Chyba pri vystavovaní: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}
